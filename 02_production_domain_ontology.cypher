@@ -57,110 +57,36 @@ MERGE (c)-[:SUBCLASS_OF]->(wc);
 
 
 // ============================================================
-// 2. Equipment  (SUBCLASS_OF core Equipment)
+// 2. Equipment
 // ============================================================
-// The make-side units and pack-side stations attach directly to the core
-// Equipment class. There is no intermediate ProductionEquipment parent: the
-// :Production label and the /production/ URI namespace already carry which
-// domain owns an asset, so a grouping node would only restate them.
+// Production defines no equipment classes. The make-side units and pack-side
+// stations (Mixer, Kettle, Filler, Case Packer, ...) are instances of the core
+// class Equipment, and their kinds are entries in the equipment class catalogue
+// -- Plant IT master data, mirrored into the graph -- that each asset points to
+// with IS_OF_CLASS.
 
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/PreMixer'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'PreMixer',
-    c.description = 'Combines and hydrates recipe ingredients into a uniform pre-blend ahead of cooking.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/CookKettle'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'CookKettle',
-    c.description = 'Steam-jacketed vessel that heats and holds the blend for pasteurization and thickener activation.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/Deaerator'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'Deaerator',
-    c.description = 'Removes entrained air from the cooked product under vacuum to protect colour and shelf life.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/Homogenizer'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'Homogenizer',
-    c.description = 'Applies high-pressure shear to reduce particle size and stabilize the product emulsion.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/BufferTank'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'BufferTank',
-    c.description = 'Jacketed hot-hold tank that decouples batch production from continuous filling.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/Filler'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'Filler',
-    c.description = 'Doses hot product into primary containers at controlled fill weight.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/Capper'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'Capper',
-    c.description = 'Applies and torques closures onto filled containers.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/Labeler'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'Labeler',
-    c.description = 'Applies front and back labels to containers.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/DateCoder'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'DateCoder',
-    c.description = 'Prints lot code and best-before date onto containers.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/XRayInspector'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'XRayInspector',
-    c.description = 'Screens filled containers for foreign bodies and rejects failures.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/CasePacker'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'CasePacker',
-    c.description = 'Groups finished containers into shipping cases.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/Palletizer'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'Palletizer',
-    c.description = 'Stacks cases onto pallets for warehousing and dispatch.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/InversionTunnel'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'InversionTunnel',
-    c.description = 'Inverts hot-filled containers after capping so the product sterilizes the closure and headspace.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/CoolingTunnel'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'CoolingTunnel',
-    c.description = 'Cools hot-filled containers to ambient before downstream handling.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/Conveyor'})
-ON CREATE SET c.created_at = datetime()
-SET c:Production, c.name = 'Conveyor',
-    c.description = 'Transports containers between packaging stations.',
-    c.version = '1.0.0';
-
-// The units and stations are Equipment.
-MATCH (core:Class {name: 'Equipment'})
-MATCH (c:Class) WHERE c.name IN [
-  'PreMixer', 'CookKettle', 'Deaerator', 'Homogenizer', 'BufferTank',
-  'Filler', 'Capper', 'Labeler', 'DateCoder', 'XRayInspector',
-  'CasePacker', 'Palletizer', 'InversionTunnel', 'CoolingTunnel', 'Conveyor' ]
-MERGE (c)-[:SUBCLASS_OF]->(core);
+// One-time cleanup: these kinds of equipment were classes before the equipment
+// class catalogue (Plant IT master data, mirrored into the graph). Assets no
+// longer reference them -- they are instances of Equipment, classified with
+// IS_OF_CLASS -- so drop the old class nodes. Idempotent. Retire once every
+// deployed graph has run it.
+MATCH (c:Class) WHERE c.uri IN [
+  'http://industry40.tv/ontology/production/PreMixer',
+  'http://industry40.tv/ontology/production/CookKettle',
+  'http://industry40.tv/ontology/production/Deaerator',
+  'http://industry40.tv/ontology/production/Homogenizer',
+  'http://industry40.tv/ontology/production/BufferTank',
+  'http://industry40.tv/ontology/production/Filler',
+  'http://industry40.tv/ontology/production/Capper',
+  'http://industry40.tv/ontology/production/Labeler',
+  'http://industry40.tv/ontology/production/DateCoder',
+  'http://industry40.tv/ontology/production/XRayInspector',
+  'http://industry40.tv/ontology/production/CasePacker',
+  'http://industry40.tv/ontology/production/Palletizer',
+  'http://industry40.tv/ontology/production/InversionTunnel',
+  'http://industry40.tv/ontology/production/CoolingTunnel',
+  'http://industry40.tv/ontology/production/Conveyor' ]
+DETACH DELETE c;
 
 
 // ============================================================

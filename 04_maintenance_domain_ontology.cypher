@@ -45,28 +45,23 @@ SET c:Maintenance, c.name = 'SparePart',
     c.description = 'A replacement component held for maintenance, such as a filler seal, pump bearing, or homogenizer valve.',
     c.version = '1.0.0';
 
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/maintenance/MaintenanceTool'})
-ON CREATE SET c.created_at = datetime()
-SET c:Maintenance, c.name = 'MaintenanceTool',
-    c.description = 'An instrument or piece of gear a technician uses to carry out maintenance, such as a torque wrench or vibration analyser.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/maintenance/ConditionSensor'})
-ON CREATE SET c.created_at = datetime()
-SET c:Maintenance, c.name = 'ConditionSensor',
-    c.description = 'A sensor mounted on equipment to track health indicators such as vibration, temperature, or motor current.',
-    c.version = '1.0.0';
-
 // A spare part is stock consumed to service an asset — it is held, issued and
 // fitted rather than operated — so it is Material, not Equipment.
 MATCH (core:Class {name: 'Material'})
 MATCH (c:Class) WHERE c.name IN ['SparePart']
 MERGE (c)-[:SUBCLASS_OF]->(core);
 
-// Tools and condition sensors are Equipment.
-MATCH (core:Class {name: 'Equipment'})
-MATCH (c:Class) WHERE c.name IN ['MaintenanceTool', 'ConditionSensor']
-MERGE (c)-[:SUBCLASS_OF]->(core);
+// Tools and condition sensors are Equipment, but not classes here: Maintenance
+// Tool and Condition Sensor are entries in the equipment class catalogue (Plant
+// IT master data, mirrored into the graph). One-time cleanup: these kinds of
+// equipment were classes before the equipment class catalogue (Plant IT master
+// data, mirrored into the graph). Assets no longer reference them -- they are
+// instances of Equipment, classified with IS_OF_CLASS -- so drop the old class
+// nodes. Idempotent. Retire once every deployed graph has run it.
+MATCH (c:Class) WHERE c.uri IN [
+  'http://industry40.tv/ontology/maintenance/MaintenanceTool',
+  'http://industry40.tv/ontology/maintenance/ConditionSensor' ]
+DETACH DELETE c;
 
 
 // ============================================================

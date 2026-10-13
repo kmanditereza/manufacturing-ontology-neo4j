@@ -49,73 +49,28 @@ MERGE (c)-[:SUBCLASS_OF]->(core);
 
 
 // ============================================================
-// 2. Utility equipment  (SUBCLASS_OF core Equipment)
+// 2. Utility equipment
 // ============================================================
-// The utility assets attach directly to the core Equipment class. There is no
-// intermediate UtilityEquipment parent: the :Energy label and the /energy/ URI
-// namespace already carry which domain owns an asset.
+// Energy defines no equipment classes. Boilers, compressors, cooling towers,
+// heat exchangers and meters are instances of the core class Equipment, and
+// their kinds are entries in the equipment class catalogue -- Plant IT master
+// data, mirrored into the graph -- that each asset points to with IS_OF_CLASS.
 
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/energy/EnergyMeter'})
-ON CREATE SET c.created_at = datetime()
-SET c:Energy, c.name = 'EnergyMeter',
-    c.description = 'A meter that measures consumption of an energy carrier such as steam, gas or compressed air at a metering point.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/energy/PowerMeter'})
-ON CREATE SET c.created_at = datetime()
-SET c:Energy, c.name = 'PowerMeter',
-    c.description = 'An electrical meter that measures active power, demand and energy drawn by a load or the whole plant.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/energy/Boiler'})
-ON CREATE SET c.created_at = datetime()
-SET c:Energy, c.name = 'Boiler',
-    c.description = 'A fired vessel that raises steam for the cook kettles, buffer tanks and clean-in-place circuits.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/energy/CoolingSystem'})
-ON CREATE SET c.created_at = datetime()
-SET c:Energy, c.name = 'CoolingSystem',
-    c.description = 'A chiller and cooling-water plant that removes heat from hot-filled product and process equipment.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/energy/CompressedAirSystem'})
-ON CREATE SET c.created_at = datetime()
-SET c:Energy, c.name = 'CompressedAirSystem',
-    c.description = 'A compressor and receiver plant that supplies compressed air to pneumatic actuators and packaging machinery.',
-    c.version = '1.0.0';
-
-// CoolingSystem and CompressedAirSystem above name whole utility PLANTS. The
-// three classes below name the individual UNITS that make one up, because that
-// is the level at which the floor commissions and meters an asset: the cooling
-// water work centre publishes a cooling tower, not "the cooling system". Both
-// tiers are Equipment; the plant reaches its units through the work centre that
-// contains them, not through the class hierarchy.
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/energy/Compressor'})
-ON CREATE SET c.created_at = datetime()
-SET c:Energy, c.name = 'Compressor',
-    c.description = 'A machine that raises air or gas pressure. The generating unit inside a CompressedAirSystem.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/energy/CoolingTower'})
-ON CREATE SET c.created_at = datetime()
-SET c:Energy, c.name = 'CoolingTower',
-    c.description = 'An evaporative heat-rejection unit that returns heat from the cooling-water loop to atmosphere. The rejecting unit inside a CoolingSystem.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/energy/HeatExchanger'})
-ON CREATE SET c.created_at = datetime()
-SET c:Energy, c.name = 'HeatExchanger',
-    c.description = 'A unit that transfers heat between two fluid streams without mixing them — here raising hot water from steam for the clean-in-place circuits.',
-    c.version = '1.0.0';
-
-// The utility assets are Equipment.
-MATCH (core:Class {name: 'Equipment'})
-MATCH (c:Class) WHERE c.name IN [
-  'EnergyMeter', 'PowerMeter', 'Boiler', 'CoolingSystem', 'CompressedAirSystem',
-  'Compressor', 'CoolingTower', 'HeatExchanger' ]
-MERGE (c)-[:SUBCLASS_OF]->(core);
+// One-time cleanup: these kinds of equipment were classes before the equipment
+// class catalogue (Plant IT master data, mirrored into the graph). Assets no
+// longer reference them -- they are instances of Equipment, classified with
+// IS_OF_CLASS -- so drop the old class nodes. Idempotent. Retire once every
+// deployed graph has run it.
+MATCH (c:Class) WHERE c.uri IN [
+  'http://industry40.tv/ontology/energy/EnergyMeter',
+  'http://industry40.tv/ontology/energy/PowerMeter',
+  'http://industry40.tv/ontology/energy/Boiler',
+  'http://industry40.tv/ontology/energy/CoolingSystem',
+  'http://industry40.tv/ontology/energy/CompressedAirSystem',
+  'http://industry40.tv/ontology/energy/Compressor',
+  'http://industry40.tv/ontology/energy/CoolingTower',
+  'http://industry40.tv/ontology/energy/HeatExchanger' ]
+DETACH DELETE c;
 
 
 // ============================================================

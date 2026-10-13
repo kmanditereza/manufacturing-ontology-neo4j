@@ -66,37 +66,13 @@ MERGE (c)-[:SUBCLASS_OF]->(wc);
 
 // ============================================================
 // 2. Physical entities  (SUBCLASS_OF PhysicalEntity)
-// The lots and holders that inventory is tracked and held as.
+// The lots and loads that inventory is tracked and held as.
 // ============================================================
 
 MERGE (c:Class {uri: 'http://industry40.tv/ontology/inventory/MaterialLot'})
 ON CREATE SET c.created_at = datetime()
 SET c:Inventory, c.name = 'MaterialLot',
     c.description = 'A traceable quantity of a single material received or produced together and sharing one lot code.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/inventory/StorageBin'})
-ON CREATE SET c.created_at = datetime()
-SET c:Inventory, c.name = 'StorageBin',
-    c.description = 'A discrete addressable position on a rack or shelf that holds a unit load or quantity of material.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/inventory/Silo'})
-ON CREATE SET c.created_at = datetime()
-SET c:Inventory, c.name = 'Silo',
-    c.description = 'A bulk vessel storing dry ingredients such as sugar or starch ahead of the batch process.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/inventory/StorageTank'})
-ON CREATE SET c.created_at = datetime()
-SET c:Inventory, c.name = 'StorageTank',
-    c.description = 'A bulk vessel storing liquid ingredients such as vinegar or oil ahead of the batch process.',
-    c.version = '1.0.0';
-
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/inventory/Hopper'})
-ON CREATE SET c.created_at = datetime()
-SET c:Inventory, c.name = 'Hopper',
-    c.description = 'A small feed vessel that meters a minor dry ingredient — spice, salt or additive — into the batch on demand. Distinguished from a Silo by duty rather than shape: a silo holds bulk, a hopper doses.',
     c.version = '1.0.0';
 
 MERGE (c:Class {uri: 'http://industry40.tv/ontology/inventory/UnitLoad'})
@@ -114,10 +90,21 @@ MATCH (core:Class {name: 'PhysicalEntity'})
 MATCH (c:Class) WHERE c.name IN ['MaterialLot', 'UnitLoad']
 MERGE (c)-[:SUBCLASS_OF]->(core);
 
-// The vessels and positions that hold inventory are Equipment.
-MATCH (core:Class {name: 'Equipment'})
-MATCH (c:Class) WHERE c.name IN ['StorageBin', 'Silo', 'StorageTank', 'Hopper']
-MERGE (c)-[:SUBCLASS_OF]->(core);
+// The vessels that hold inventory (Tank, Silo, Bin, Hopper) are Equipment, but
+// not classes here: they are entries in the equipment class catalogue (Plant IT
+// master data, mirrored into the graph). Storage and buffer tanks are one
+// entry, Tank -- what a tank is used for is its role on the line, not its kind.
+// One-time cleanup: these kinds of equipment were classes before the equipment
+// class catalogue (Plant IT master data, mirrored into the graph). Assets no
+// longer reference them -- they are instances of Equipment, classified with
+// IS_OF_CLASS -- so drop the old class nodes. Idempotent. Retire once every
+// deployed graph has run it.
+MATCH (c:Class) WHERE c.uri IN [
+  'http://industry40.tv/ontology/inventory/StorageBin',
+  'http://industry40.tv/ontology/inventory/Silo',
+  'http://industry40.tv/ontology/inventory/StorageTank',
+  'http://industry40.tv/ontology/inventory/Hopper' ]
+DETACH DELETE c;
 
 
 // ============================================================

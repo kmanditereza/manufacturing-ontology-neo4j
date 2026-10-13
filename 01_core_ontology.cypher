@@ -175,9 +175,10 @@ MERGE (c)-[:SUBCLASS_OF]->(loc);
 // The counterpart of the location spine on the PhysicalEntity branch. Every
 // physical thing in the plant divides on one question: does the plant OPERATE
 // it, or does it FLOW THROUGH? Equipment is operated; Material is consumed,
-// transformed or dispatched. Domain extensions specialise both (Filler,
-// Boiler, ConditionSensor; RawMaterial, Closure, Sample), exactly as they
-// specialise Area and WorkCenter.
+// transformed or dispatched. Domain extensions specialise Material into kinds
+// (RawMaterial, Closure, Sample), as they specialise Area and WorkCenter.
+// Equipment is NOT specialised: kinds of equipment are catalogue entries
+// (section 2f), so every asset is an instance of Equipment itself.
 //
 // Two kinds of physical entity sit alongside these rather than below them,
 // deliberately:
@@ -193,7 +194,7 @@ MERGE (c:Class {uri: 'http://industry40.tv/ontology/core/Equipment'})
 ON CREATE SET c.created_at = datetime()
 SET c:Core,
     c.name = 'Equipment',
-    c.description = 'A physical asset the plant installs, operates and maintains in order to carry out work — it transforms, moves, packages, measures, stores or services something, rather than being consumed by the process itself. Located at a Work Center, and the entity that equipment states, modes and maintenance are asserted against. Domain extensions specialise it into concrete asset types.',
+    c.description = 'A physical asset the plant installs, operates and maintains in order to carry out work — it transforms, moves, packages, measures, stores or services something, rather than being consumed by the process itself. Located at a Work Center, and the entity that equipment states, modes and maintenance are asserted against. Not subclassed: an asset is an instance of Equipment, and its kind is the equipment class catalogue entry it points to with IS_OF_CLASS.',
     c.examples = ['Filler', 'Cook Kettle', 'Boiler', 'Energy Meter', 'pH Meter', 'Condition Sensor', 'Storage Tank', 'Torque Wrench'],
     c.version = '1.0.0';
 
@@ -288,6 +289,46 @@ SET c:Core, c.name = 'EquipmentStateChangeEvent',
 MATCH (e:Class {name: 'Event'})
 MATCH (c:Class {name: 'EquipmentStateChangeEvent'})
 MERGE (c)-[:SUBCLASS_OF]->(e);
+
+
+// ============================================================
+// 2f. Equipment class catalogue
+// ============================================================
+// Kinds of equipment (Filler, Case Packer, Boiler, Tank, ...) are NOT ontology
+// classes. An asset is an instance of the single class Equipment, and its kind
+// is a catalogue entry it points to with IS_OF_CLASS -- the ISA-95 Equipment
+// Class. Adding a new kind of machine is then a row of master data, not a
+// change to the ontology.
+//
+// The catalogue is mastered in Plant IT (equipment_class,
+// equipment_class_property) and mirrored into the graph as instances of the two
+// classes below. A catalogue entry is informational -- it describes a kind of
+// equipment and what its members are expected to provide -- so both sit under
+// OperationalEntity, not PhysicalEntity.
+//
+// The two relationships keep meaning and classification apart:
+//   SUBCLASS_OF / IS_INSTANCE_OF  what a thing IS, in the ontology's terms
+//   IS_OF_CLASS                   which catalogue entry classifies it
+//
+// See Design_Note_Equipment_Class_Catalogue.md.
+
+MERGE (c:Class {uri: 'http://industry40.tv/ontology/core/EquipmentClass'})
+ON CREATE SET c.created_at = datetime()
+SET c:Core, c.name = 'EquipmentClass',
+    c.description = 'A catalogue entry describing a kind of equipment and what every member of that kind is expected to provide. Mastered as data; an asset is classified against one with IS_OF_CLASS. The ISA-95 Equipment Class.',
+    c.examples = ['Filler', 'Case Packer', 'Boiler', 'Tank', 'Power Monitoring Unit'],
+    c.version = '1.0.0';
+
+MERGE (c:Class {uri: 'http://industry40.tv/ontology/core/PropertyDefinition'})
+ON CREATE SET c.created_at = datetime()
+SET c:Core, c.name = 'PropertyDefinition',
+    c.description = 'A property that members of an equipment class are expected to provide -- its name, unit, data type and whether it is required. The definition of a property, not a value of it: values arrive on the UNS.',
+    c.examples = ['Filler speed (BPM, required)', 'Tank level (%, required)', 'Case Packer hydraulic pressure (bar, optional)'],
+    c.version = '1.0.0';
+
+MATCH (oe:Class {name: 'OperationalEntity'})
+MATCH (c:Class) WHERE c.name IN ['EquipmentClass', 'PropertyDefinition']
+MERGE (c)-[:SUBCLASS_OF]->(oe);
 
 
 // ============================================================
@@ -482,6 +523,23 @@ SET r:Core,
     r.examples = ['Site CONTAINS Area', 'Area CONTAINS WorkCenter', 'WorkCenter CONTAINS WorkUnit'],
     r.version = '1.0.0';
 
+// ----- Equipment classification (see 2f) -----
+MERGE (r:Relationship {uri: 'http://industry40.tv/ontology/core/rel/IS_OF_CLASS'})
+ON CREATE SET r.created_at = datetime()
+SET r:Core,
+    r.name = 'IS_OF_CLASS',
+    r.description = 'Classifies an asset against its equipment class catalogue entry -- what kind of equipment it is, in the terms the plant uses. Classification, not meaning: the asset remains an instance of Equipment.',
+    r.examples = ['FL-501 IS_OF_CLASS Filler', 'BT-451 IS_OF_CLASS Tank'],
+    r.version = '1.0.0';
+
+MERGE (r:Relationship {uri: 'http://industry40.tv/ontology/core/rel/HAS_PROPERTY_DEFINITION'})
+ON CREATE SET r.created_at = datetime()
+SET r:Core,
+    r.name = 'HAS_PROPERTY_DEFINITION',
+    r.description = 'A property every member of an equipment class is expected to provide. Defined per class; the same measurement uses the same name and unit across classes by convention.',
+    r.examples = ['Filler HAS_PROPERTY_DEFINITION speed', 'Tank HAS_PROPERTY_DEFINITION level'],
+    r.version = '1.0.0';
+
 
 // ============================================================
 // 4. Domain wiring — (:Relationship)-[:HAS_DOMAIN]->(:Class)  (the "from" side)
@@ -574,6 +632,19 @@ MERGE (r)-[:HAS_DOMAIN]->(c);
 MATCH (r:Relationship {name: 'CONTAINS'}), (c:Class {name: 'Location'})
 MERGE (r)-[:HAS_DOMAIN]->(c);
 
+MATCH (r:Relationship {name: 'IS_OF_CLASS'}), (c:Class {name: 'Equipment'})
+MERGE (r)-[:HAS_DOMAIN]->(c);
+
+MATCH (r:Relationship {name: 'HAS_PROPERTY_DEFINITION'}), (c:Class {name: 'EquipmentClass'})
+MERGE (r)-[:HAS_DOMAIN]->(c);
+
+// The one OperationalEntity that may carry HAS_CAPABILITY. An equipment class
+// does not perform anything itself; it declares the capabilities every member
+// provides (a Tank stores, a Power Monitoring Unit meters). This is how
+// differences in behaviour are expressed without equipment subclasses.
+MATCH (r:Relationship {name: 'HAS_CAPABILITY'}), (c:Class {name: 'EquipmentClass'})
+MERGE (r)-[:HAS_DOMAIN]->(c);
+
 
 // ============================================================
 // 5. Range wiring — (:Relationship)-[:HAS_RANGE]->(:Class)  (the "to" side)
@@ -640,4 +711,10 @@ MATCH (r:Relationship {name: 'HAS_SUBPROCESS'}), (c:Class {name: 'Process'})
 MERGE (r)-[:HAS_RANGE]->(c);
 
 MATCH (r:Relationship {name: 'CONTAINS'}), (c:Class {name: 'Location'})
+MERGE (r)-[:HAS_RANGE]->(c);
+
+MATCH (r:Relationship {name: 'IS_OF_CLASS'}), (c:Class {name: 'EquipmentClass'})
+MERGE (r)-[:HAS_RANGE]->(c);
+
+MATCH (r:Relationship {name: 'HAS_PROPERTY_DEFINITION'}), (c:Class {name: 'PropertyDefinition'})
 MERGE (r)-[:HAS_RANGE]->(c);

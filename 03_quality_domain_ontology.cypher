@@ -56,21 +56,21 @@ SET c:Quality, c.name = 'RetainedSample',
     c.description = 'A sample kept in storage through the product shelf life to support later reference or investigation.',
     c.version = '1.0.0';
 
-MERGE (c:Class {uri: 'http://industry40.tv/ontology/quality/TestEquipment'})
-ON CREATE SET c.created_at = datetime()
-SET c:Quality, c.name = 'TestEquipment',
-    c.description = 'A laboratory instrument used to measure product attributes, such as a pH meter, refractometer, or viscometer.',
-    c.version = '1.0.0';
-
 // A sample is a portion of material drawn off for test, so it is Material.
 MATCH (core:Class {name: 'Material'})
 MATCH (c:Class) WHERE c.name IN ['Sample', 'RetainedSample']
 MERGE (c)-[:SUBCLASS_OF]->(core);
 
-// Laboratory instruments are Equipment.
-MATCH (core:Class {name: 'Equipment'})
-MATCH (c:Class) WHERE c.name IN ['TestEquipment']
-MERGE (c)-[:SUBCLASS_OF]->(core);
+// Laboratory instruments are Equipment, but not a class here: Test Equipment is
+// an entry in the equipment class catalogue (Plant IT master data, mirrored
+// into the graph). One-time cleanup: these kinds of equipment were classes
+// before the equipment class catalogue (Plant IT master data, mirrored into the
+// graph). Assets no longer reference them -- they are instances of Equipment,
+// classified with IS_OF_CLASS -- so drop the old class nodes. Idempotent.
+// Retire once every deployed graph has run it.
+MATCH (c:Class) WHERE c.uri IN [
+  'http://industry40.tv/ontology/quality/TestEquipment' ]
+DETACH DELETE c;
 
 
 // ============================================================
