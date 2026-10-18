@@ -6,18 +6,6 @@
 // maintenance operation — the assets kept serviceable, the work that
 // keeps them so, and the health states they move through — and
 // specialises a few core relationships.
-//
-// PATTERN
-//   Concept       -> (:Class:Maintenance {uri, name, description})
-//                    wired to a core concept by (child)-[:SUBCLASS_OF]->(parent)
-//   Relationship  -> (:Relationship:Maintenance {uri, name, description})
-//                    wired to the core relationship it refines by
-//                    (child)-[:SPECIALIZES]->(parent), and to its own
-//                    (narrower) HAS_DOMAIN / HAS_RANGE concepts.
-//
-// Domain / range remain descriptive, not database-enforced.
-// Load order: after 01_core_ontology. Idempotent (MERGE on uri).
-// ============================================================
 
 
 // ============================================================
@@ -51,13 +39,7 @@ MATCH (core:Class {name: 'Material'})
 MATCH (c:Class) WHERE c.name IN ['SparePart']
 MERGE (c)-[:SUBCLASS_OF]->(core);
 
-// Tools and condition sensors are Equipment, but not classes here: Maintenance
-// Tool and Condition Sensor are entries in the equipment class catalogue (Plant
-// IT master data, mirrored into the graph). One-time cleanup: these kinds of
-// equipment were classes before the equipment class catalogue (Plant IT master
-// data, mirrored into the graph). Assets no longer reference them -- they are
-// instances of Equipment, classified with IS_OF_CLASS -- so drop the old class
-// nodes. Idempotent. Retire once every deployed graph has run it.
+
 MATCH (c:Class) WHERE c.uri IN [
   'http://industry40.tv/ontology/maintenance/MaintenanceTool',
   'http://industry40.tv/ontology/maintenance/ConditionSensor' ]
@@ -176,21 +158,6 @@ MATCH (core:Class {name: 'Agent'})
 MATCH (c:Class) WHERE c.name IN ['MaintenanceTechnician', 'ReliabilityEngineer']
 MERGE (c)-[:SUBCLASS_OF]->(core);
 
-
-// ============================================================
-// 6\. Capabilities  (none — see below)
-// ============================================================
-// Deliberately empty. The core Capability concept is kept — separating what a
-// resource CAN DO from what it is currently doing is a real distinction, and
-// it is what makes resource selection and scheduling answerable. What is not
-// kept is a pre-enumerated capability per process.
-//
-// Eight of the original domain capabilities were exact name mirrors of a
-// process class (FillingCapability/Filling, RepairCapability/Repair, and so
-// on), so they carried no information the process did not already carry, and
-// neither HAS_CAPABILITY nor REQUIRES_CAPABILITY was ever asserted against any
-// of them. Domain capabilities are added here when something actually needs to
-// ask "which asset can do this?" — not in advance.
 
 // ============================================================
 // 7. Events  (SUBCLASS_OF Event, via MaintenanceEvent)

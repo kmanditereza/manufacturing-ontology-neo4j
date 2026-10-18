@@ -5,18 +5,7 @@
 // ketchup plant. It subclasses the core concepts with the concrete
 // concepts of laboratory testing, in-line inspection, and material
 // disposition, and specialises a few core relationships.
-//
-// PATTERN
-//   Concept       -> (:Class:Quality {uri, name, description})
-//                    wired to a core concept by (child)-[:SUBCLASS_OF]->(parent)
-//   Relationship  -> (:Relationship:Quality {uri, name, description})
-//                    wired to the core relationship it refines by
-//                    (child)-[:SPECIALIZES]->(parent), and to its own
-//                    (narrower) HAS_DOMAIN / HAS_RANGE concepts.
-//
-// Domain / range remain descriptive, not database-enforced.
-// Load order: after 01_core_ontology. Idempotent (MERGE on uri).
-// ============================================================
+
 
 
 // ============================================================
@@ -61,13 +50,7 @@ MATCH (core:Class {name: 'Material'})
 MATCH (c:Class) WHERE c.name IN ['Sample', 'RetainedSample']
 MERGE (c)-[:SUBCLASS_OF]->(core);
 
-// Laboratory instruments are Equipment, but not a class here: Test Equipment is
-// an entry in the equipment class catalogue (Plant IT master data, mirrored
-// into the graph). One-time cleanup: these kinds of equipment were classes
-// before the equipment class catalogue (Plant IT master data, mirrored into the
-// graph). Assets no longer reference them -- they are instances of Equipment,
-// classified with IS_OF_CLASS -- so drop the old class nodes. Idempotent.
-// Retire once every deployed graph has run it.
+
 MATCH (c:Class) WHERE c.uri IN [
   'http://industry40.tv/ontology/quality/TestEquipment' ]
 DETACH DELETE c;
@@ -203,20 +186,6 @@ MATCH (c:Class) WHERE c.name IN ['QCTechnician', 'QualityManager', 'LabAnalyst']
 MERGE (c)-[:SUBCLASS_OF]->(core);
 
 
-// ============================================================
-// 6\. Capabilities  (none — see below)
-// ============================================================
-// Deliberately empty. The core Capability concept is kept — separating what a
-// resource CAN DO from what it is currently doing is a real distinction, and
-// it is what makes resource selection and scheduling answerable. What is not
-// kept is a pre-enumerated capability per process.
-//
-// Eight of the original domain capabilities were exact name mirrors of a
-// process class (FillingCapability/Filling, RepairCapability/Repair, and so
-// on), so they carried no information the process did not already carry, and
-// neither HAS_CAPABILITY nor REQUIRES_CAPABILITY was ever asserted against any
-// of them. Domain capabilities are added here when something actually needs to
-// ask "which asset can do this?" — not in advance.
 
 // ============================================================
 // 7. Events  (SUBCLASS_OF Event, via QualityEvent)

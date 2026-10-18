@@ -7,18 +7,6 @@
 // and lots they are held as, the movements that relocate them, and
 // the records that account for them — and specialises a few core
 // relationships.
-//
-// PATTERN
-//   Concept       -> (:Class:Inventory {uri, name, description})
-//                    wired to a core concept by (child)-[:SUBCLASS_OF]->(parent)
-//   Relationship  -> (:Relationship:Inventory {uri, name, description})
-//                    wired to the core relationship it refines by
-//                    (child)-[:SPECIALIZES]->(parent), and to its own
-//                    (narrower) HAS_DOMAIN / HAS_RANGE concepts.
-//
-// Domain / range remain descriptive, not database-enforced.
-// Load order: after 01_core_ontology. Idempotent (MERGE on uri).
-// ============================================================
 
 
 // ============================================================
@@ -81,24 +69,10 @@ SET c:Inventory, c.name = 'UnitLoad',
     c.description = 'A palletized grouping of material — typically shipping cases stacked on a pallet — handled, stored and dispatched as a single unit. A grouping of material rather than a kind of material, so it is not a Material.',
     c.version = '1.0.0';
 
-// MaterialLot and UnitLoad sit directly under PhysicalEntity, as siblings of
-// both Equipment and Material. Neither is a KIND of material: a lot is a
-// tracked QUANTITY of one and a unit load is a GROUPING of one. Subclassing
-// either under Material would mix the definition tier with the quantity tier,
-// so a lot reaches its material through IS_QUANTITY_OF (section 9) instead.
 MATCH (core:Class {name: 'PhysicalEntity'})
 MATCH (c:Class) WHERE c.name IN ['MaterialLot', 'UnitLoad']
 MERGE (c)-[:SUBCLASS_OF]->(core);
 
-// The vessels that hold inventory (Tank, Silo, Bin, Hopper) are Equipment, but
-// not classes here: they are entries in the equipment class catalogue (Plant IT
-// master data, mirrored into the graph). Storage and buffer tanks are one
-// entry, Tank -- what a tank is used for is its role on the line, not its kind.
-// One-time cleanup: these kinds of equipment were classes before the equipment
-// class catalogue (Plant IT master data, mirrored into the graph). Assets no
-// longer reference them -- they are instances of Equipment, classified with
-// IS_OF_CLASS -- so drop the old class nodes. Idempotent. Retire once every
-// deployed graph has run it.
 MATCH (c:Class) WHERE c.uri IN [
   'http://industry40.tv/ontology/inventory/StorageBin',
   'http://industry40.tv/ontology/inventory/Silo',
@@ -223,22 +197,6 @@ MATCH (core:Class {name: 'Agent'})
 MATCH (c:Class) WHERE c.name IN ['WarehouseOperator', 'MaterialHandler']
 MERGE (c)-[:SUBCLASS_OF]->(core);
 
-
-// ============================================================
-// 6\. Capabilities  (none — see below)
-// ============================================================
-// Deliberately empty. The core Capability concept is kept — separating what a
-// resource CAN DO from what it is currently doing is a real distinction, and
-// it is what makes resource selection and scheduling answerable. What is not
-// kept is a pre-enumerated capability per process.
-//
-// Eight of the original domain capabilities were exact name mirrors of a
-// process class (FillingCapability/Filling, RepairCapability/Repair, and so
-// on), so they carried no information the process did not already carry, and
-// neither HAS_CAPABILITY nor REQUIRES_CAPABILITY was ever asserted against any
-// of them. Domain capabilities are added here when something actually needs to
-// ask "which asset can do this?" — not in advance.
-
 // ============================================================
 // 7. Events  (SUBCLASS_OF Event, via InventoryEvent)
 // ============================================================
@@ -352,11 +310,7 @@ SET r:Inventory, r.name = 'STORED_AT',
     r.description = 'A material lot is held at a storage location. Specialises IS_LOCATED_AT.',
     r.version = '1.0.0';
 
-// --- the definition/quantity bridge (MaterialLot -> Material) ---
-// Deliberately SPECIALIZES nothing: no core relationship expresses the
-// definition/quantity split, so this is a new relation rather than a
-// narrowing of an existing one. It is what keeps MaterialLot off the
-// Material subclass tree while still tying a lot to what it is a lot OF.
+
 MERGE (r:Relationship {uri: 'http://industry40.tv/ontology/inventory/rel/IS_QUANTITY_OF'})
 ON CREATE SET r.created_at = datetime()
 SET r:Inventory, r.name = 'IS_QUANTITY_OF',

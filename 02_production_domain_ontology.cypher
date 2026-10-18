@@ -5,18 +5,6 @@
 // directly (flat, 2-tier) with the concrete concepts of a ketchup
 // production floor — the make side (batch process) and the pack side
 // (discrete flow) — and specialises a few core relationships.
-//
-// PATTERN
-//   Concept       -> (:Class:Production {uri, name, description})
-//                    wired to a core concept by (child)-[:SUBCLASS_OF]->(parent)
-//   Relationship  -> (:Relationship:Production {uri, name, description})
-//                    wired to the core relationship it refines by
-//                    (child)-[:SPECIALIZES]->(parent), and to its own
-//                    (narrower) HAS_DOMAIN / HAS_RANGE concepts.
-//
-// Domain / range remain descriptive, not database-enforced.
-// Load order: after 01_core_ontology. Idempotent (MERGE on uri).
-// ============================================================
 
 
 // ============================================================
@@ -55,38 +43,6 @@ MATCH (wc:Class {name: 'WorkCenter'})
 MATCH (c:Class) WHERE c.name IN ['ProductionLine', 'PackagingLine']
 MERGE (c)-[:SUBCLASS_OF]->(wc);
 
-
-// ============================================================
-// 2. Equipment
-// ============================================================
-// Production defines no equipment classes. The make-side units and pack-side
-// stations (Mixer, Kettle, Filler, Case Packer, ...) are instances of the core
-// class Equipment, and their kinds are entries in the equipment class catalogue
-// -- Plant IT master data, mirrored into the graph -- that each asset points to
-// with IS_OF_CLASS.
-
-// One-time cleanup: these kinds of equipment were classes before the equipment
-// class catalogue (Plant IT master data, mirrored into the graph). Assets no
-// longer reference them -- they are instances of Equipment, classified with
-// IS_OF_CLASS -- so drop the old class nodes. Idempotent. Retire once every
-// deployed graph has run it.
-MATCH (c:Class) WHERE c.uri IN [
-  'http://industry40.tv/ontology/production/PreMixer',
-  'http://industry40.tv/ontology/production/CookKettle',
-  'http://industry40.tv/ontology/production/Deaerator',
-  'http://industry40.tv/ontology/production/Homogenizer',
-  'http://industry40.tv/ontology/production/BufferTank',
-  'http://industry40.tv/ontology/production/Filler',
-  'http://industry40.tv/ontology/production/Capper',
-  'http://industry40.tv/ontology/production/Labeler',
-  'http://industry40.tv/ontology/production/DateCoder',
-  'http://industry40.tv/ontology/production/XRayInspector',
-  'http://industry40.tv/ontology/production/CasePacker',
-  'http://industry40.tv/ontology/production/Palletizer',
-  'http://industry40.tv/ontology/production/InversionTunnel',
-  'http://industry40.tv/ontology/production/CoolingTunnel',
-  'http://industry40.tv/ontology/production/Conveyor' ]
-DETACH DELETE c;
 
 
 // ============================================================
@@ -139,10 +95,6 @@ SET c:Production, c.name = 'ShippingCase',
     c.description = 'A corrugated case grouping finished containers for handling.',
     c.version = '1.0.0';
 
-// Pallet is deliberately absent. It described "a unit load of cases for
-// warehousing and dispatch" — a grouping of material rather than a material —
-// which is the inventory domain's UnitLoad. The two were the same concept
-// declared in two domains; UnitLoad is the one that survives.
 
 // The inputs, in-process product and packaging are Material.
 MATCH (core:Class {name: 'Material'})
@@ -247,25 +199,6 @@ SET c:Production, c.name = 'CleaningInPlace',
     c.version = '1.0.0';
 
 // ----- The ISA-88 procedural tiers of a batch -----
-// Every BatchPhase event on the wire carries three nested identifiers —
-// batchRecordId, operationNumber/operationName, phaseNumber/phaseName — so the
-// make side has three procedural levels, not one. They are modelled as three
-// process classes, nested at the INSTANCE level with the core HAS_SUBPROCESS
-// relationship (Process -> Process):
-//
-//   Batch          B-20260603-001
-//     HAS_SUBPROCESS  BatchOperation  'Cook'                (operation 0020)
-//       HAS_SUBPROCESS  BatchPhase    'PasteurizationHold'  (phase 0023)
-//
-// A phase is PART OF a batch, not a KIND OF batch, so the nesting is
-// HAS_SUBPROCESS and never SUBCLASS_OF. All three are siblings under
-// ProductionProcess.
-//
-// Phase names (DoseWater, HeatToTarget, PullVacuum, …) are deliberately NOT
-// classes. They are recipe-specific and unbounded — a new SKU brings new
-// phases — so they stay instance data on the phase, carried in `phaseName`.
-// The named operations below are stable process types for this plant and do
-// remain classes.
 
 MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/Batch'})
 ON CREATE SET c.created_at = datetime()
@@ -451,21 +384,7 @@ MERGE (c)-[:SUBCLASS_OF]->(core);
 // ============================================================
 // 7\. Capabilities  (none — see below)
 // ============================================================
-// Deliberately empty. The core Capability concept is kept — separating what a
-// resource CAN DO from what it is currently doing is a real distinction, and
-// it is what makes resource selection and scheduling answerable. What is not
-// kept is a pre-enumerated capability per process.
-//
-// Eight of the original domain capabilities were exact name mirrors of a
-// process class (FillingCapability/Filling, RepairCapability/Repair, and so
-// on), so they carried no information the process did not already carry, and
-// neither HAS_CAPABILITY nor REQUIRES_CAPABILITY was ever asserted against any
-// of them. Domain capabilities are added here when something actually needs to
-// ask "which asset can do this?" — not in advance.
 
-// One-time cleanup: retire the domain capability classes. They were name
-// mirrors of process classes with no instance ever asserted against them.
-// Idempotent. Retire this block once every deployed graph has run it.
 MATCH (c:Class)-[:SUBCLASS_OF]->(:Class {name: 'Capability'})
 WHERE c.name <> 'Capability'
 DETACH DELETE c;
@@ -596,11 +515,6 @@ MERGE (c)-[:SUBCLASS_OF]->(p);
 // Equipment operational states and order/batch lifecycle states.
 // ============================================================
 
-// The two order lifecycles. Scoped here, not in core, because their subjects —
-// ProductionOrder and ProductionWorkOrder — are production concepts. They are
-// separate lifecycles of the same work: an order can be Released in ERP while
-// its work order is still only Received by MES, and one order can be split
-// across several work orders.
 MERGE (c:Class {uri: 'http://industry40.tv/ontology/production/ProductionOrderState'})
 ON CREATE SET c.created_at = datetime()
 SET c:Production, c.name = 'ProductionOrderState',
@@ -829,19 +743,12 @@ MATCH (core:Class {name: 'MaterialState'})
 MATCH (c:Class) WHERE c.name IN ['MaterialReleasedState', 'DisposedState']
 MERGE (c)-[:SUBCLASS_OF]->(core);
 
-// One-time cleanup: the production states previously hung directly off State
-// and are now scoped. Drop the redundant direct edge so each keeps a single
-// parent. Idempotent. Retire once every deployed graph has run it.
-// The two order scopes are excluded: they are production classes whose parent
-// really is State.
+
 MATCH (c:Class:Production)-[r:SUBCLASS_OF]->(:Class {name: 'State'})
 WHERE NOT c.name IN ['ProductionOrderState', 'ProductionWorkOrderState']
 DELETE r;
 
-// One-time cleanup: the order scopes moved here from core under new names. The
-// leaf states are now wired to ProductionOrderState / ProductionWorkOrderState,
-// so drop the old core classes and their edges. Idempotent. Retire once every
-// deployed graph has run it.
+
 MATCH (c:Class) WHERE c.uri IN [
   'http://industry40.tv/ontology/core/OrderState',
   'http://industry40.tv/ontology/core/WorkOrderState' ]
@@ -930,9 +837,5 @@ MATCH (r:Relationship) WHERE r.name IN ['IS_DISPATCHED_AS']
 MATCH (c:Class {name: 'ProductionWorkOrder'})
 MERGE (r)-[:HAS_RANGE]->(c);
 
-// One-time cleanup: IS_DISPATCHED_AS previously ran OperationalEntity ->
-// OperationalEntity. Drop those edges now that it is narrowed to
-// ProductionOrder -> ProductionWorkOrder. Idempotent. Retire once every
-// deployed graph has run it.
 MATCH (r:Relationship {name: 'IS_DISPATCHED_AS'})-[e:HAS_DOMAIN|HAS_RANGE]->(:Class {name: 'OperationalEntity'})
 DELETE e;

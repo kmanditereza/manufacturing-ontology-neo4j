@@ -8,13 +8,7 @@ MERGE (area)-[:IS_INSTANCE_OF]->(areaCls)
 MERGE (line)-[:IS_INSTANCE_OF]->(lineCls)
 MERGE (site)-[:CONTAINS]->(area)
 MERGE (area)-[:CONTAINS]->(line);
-```
 
-### 18. A machine — *an instance of Equipment*
-
-**Explain:** The filler is an instance of the core class **Equipment** — not of a "Filler" class, because there isn't one. *What kind* of equipment it is comes from its catalogue entry, linked with `IS_OF_CLASS`. In the live plant that entry is synchronised from Plant IT; here we create it by hand to keep the example self-contained.
-
-```cypher
 // 2. A machine — an instance of Equipment, classified by a catalogue entry, located on the line
 MATCH (eqCls:Class {name: 'Equipment'}), (ecCls:Class {name: 'EquipmentClass'}),
       (line:Instance {id: 'WC-MUC-PKG-L1'})
@@ -24,13 +18,8 @@ MERGE (filler)-[:IS_INSTANCE_OF]->(eqCls)
 MERGE (fillerType)-[:IS_INSTANCE_OF]->(ecCls)
 MERGE (filler)-[:IS_OF_CLASS]->(fillerType)
 MERGE (filler)-[:IS_LOCATED_AT]->(line);
-```
+//
 
-### 19. Work happening — *an instance of Filling*
-
-**Explain:** A production run is an instance of `Filling`, one of the processes the production domain defined. It occurs on the line, and the filler takes part in it.
-
-```cypher
 // 3. Work happening — an instance of the Filling process, on the line, with the filler taking part
 MATCH (fillingCls:Class {name: 'Filling'}),
       (line:Instance {id: 'WC-MUC-PKG-L1'}), (filler:Instance {id: 'EQ-FL-501'})
@@ -38,9 +27,8 @@ MERGE (run:Instance {id: 'RUN-FILL-0001'})        SET run.name = 'Filling run 00
 MERGE (run)-[:IS_INSTANCE_OF]->(fillingCls)
 MERGE (run)-[:OCCURS_AT]->(line)
 MERGE (filler)-[:PARTICIPATES_IN]->(run);
-```
 
-**Show** — the knowledge graph next to the ontology classes it uses:
-```cypher
+
+
+
 MATCH p=(:Instance)-[]->() RETURN p
-```

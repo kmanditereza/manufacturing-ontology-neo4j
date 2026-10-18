@@ -23,7 +23,6 @@
 // `created_at` is stamped only on first creation; the rest is kept in
 // sync on every run.
 //
-// Load order: after 00_constraints. Idempotent.
 // ============================================================
 
 
@@ -107,19 +106,6 @@ SET c:Core,
 // ============================================================
 // 2. Concept hierarchy
 // ============================================================
-// There is deliberately no abstract "Entity" supertype over PhysicalEntity,
-// Agent and OperationalEntity. Relationships that apply to more than one of
-// them name each one explicitly instead — see sections 4 and 5, where multiple
-// HAS_DOMAIN / HAS_RANGE edges are read as an allowed union. That is the same
-// mechanism AFFECTS already uses across Process and Event, so the supertype
-// bought nothing the model could not already express, while widening several
-// domains past what they should permit (an OperationalEntity has no
-// capability and is not located anywhere).
-
-
-// ============================================================
-// 2b. Structural location hierarchy (ISA-95)
-// ============================================================
 // The ISA-95 spatial spine — Enterprise, Site, Area, Work Center — as
 // subclasses of Location, the shared vocabulary every domain locates work
 // against. These are role-based location LEVELS; the instance-level
@@ -180,15 +166,6 @@ MERGE (c)-[:SUBCLASS_OF]->(loc);
 // Equipment is NOT specialised: kinds of equipment are catalogue entries
 // (section 2f), so every asset is an instance of Equipment itself.
 //
-// Two kinds of physical entity sit alongside these rather than below them,
-// deliberately:
-//   - EnergyCarrier (energy domain) — Electricity is not a substance, so the
-//     carriers are not modelled as Material.
-//   - MaterialLot and UnitLoad (inventory domain) — a lot is a tracked
-//     QUANTITY of a material and a unit load is a GROUPING of material, not a
-//     kind of material. Subclassing either under Material would mix the
-//     definition tier with the quantity tier. MaterialLot reaches Material
-//     through IS_QUANTITY_OF instead.
 
 MERGE (c:Class {uri: 'http://industry40.tv/ontology/core/Equipment'})
 ON CREATE SET c.created_at = datetime()
@@ -223,17 +200,6 @@ MERGE (c)-[:SUBCLASS_OF]->(pe);
 // in that domain — the order lifecycles (ProductionOrderState,
 // ProductionWorkOrderState) live in production, beside the orders they describe,
 // because core has no notion of an order to hang them on.
-//
-// NAMING: every state class ends in `State` — RunningState, HeldState,
-// OrderClosedState. Classes share one namespace, and the natural name for a
-// state is also the natural name for the event that causes it (BatchCompleted
-// the event vs BatchCompleted the state). The suffix keeps the two apart and
-// makes the kind of a class readable without traversing to its parent.
-//
-// Where the same word means different things in different scopes it is
-// qualified as well: an order is released by ERP (authorised to run) while a
-// material is released by the lab (approved for dispatch) — OrderReleasedState
-// and MaterialReleasedState are not the same condition.
 
 MERGE (c:Class {uri: 'http://industry40.tv/ontology/core/EquipmentState'})
 ON CREATE SET c.created_at = datetime()
@@ -294,23 +260,7 @@ MERGE (c)-[:SUBCLASS_OF]->(e);
 // ============================================================
 // 2f. Equipment class catalogue
 // ============================================================
-// Kinds of equipment (Filler, Case Packer, Boiler, Tank, ...) are NOT ontology
-// classes. An asset is an instance of the single class Equipment, and its kind
-// is a catalogue entry it points to with IS_OF_CLASS -- the ISA-95 Equipment
-// Class. Adding a new kind of machine is then a row of master data, not a
-// change to the ontology.
-//
-// The catalogue is mastered in Plant IT (equipment_class,
-// equipment_class_property) and mirrored into the graph as instances of the two
-// classes below. A catalogue entry is informational -- it describes a kind of
-// equipment and what its members are expected to provide -- so both sit under
-// OperationalEntity, not PhysicalEntity.
-//
-// The two relationships keep meaning and classification apart:
-//   SUBCLASS_OF / IS_INSTANCE_OF  what a thing IS, in the ontology's terms
-//   IS_OF_CLASS                   which catalogue entry classifies it
-//
-// See Design_Note_Equipment_Class_Catalogue.md.
+
 
 MERGE (c:Class {uri: 'http://industry40.tv/ontology/core/EquipmentClass'})
 ON CREATE SET c.created_at = datetime()
@@ -399,11 +349,6 @@ SET r:Core,
     r.examples = ['PackagingExecution OCCURS_AT PackagingLine', 'InspectionExecution OCCURS_AT QualityLaboratory', 'DowntimeStarted OCCURS_AT ProductionLine1'],
     r.version = '1.0.0';
 
-// The work authorised by a document, or carried out by a process execution, is
-// performed at a place. Distinct from IS_LOCATED_AT, which says where a physical
-// thing SITS: an order is not located anywhere — it is paperwork — but the work
-// it authorises happens somewhere, and that is what makes "which orders ran on
-// Line 1" answerable without walking to a batch first.
 MERGE (r:Relationship {uri: 'http://industry40.tv/ontology/core/rel/IS_EXECUTED_AT'})
 ON CREATE SET r.created_at = datetime()
 SET r:Core,
@@ -429,22 +374,6 @@ SET r:Core,
     r.version = '1.0.0';
 
 // ----- The event's subject -----
-// The weakest, broadest event-to-subject link, and deliberately so. An
-// ingestion layer knows WHICH thing a message is about long before it can
-// judge HOW the event relates to it, so CONCERNS is what it asserts. The
-// stronger claims are separate and are made only where they are true:
-//
-//   AFFECTS       the event changed the thing
-//   CHANGES_STATE the event moved it to a new state
-//   OCCURS_DURING the event happened inside that process's time window
-//
-// The distinction is not academic. A BatchReleased event CONCERNS its batch,
-// but it is a laboratory release raised after the batch finished — so it did
-// NOT occur during it. Collapsing the two would assert something false.
-//
-// Keeping this relationship broad is what lets the mapping layer stay dumb:
-// it links the event to its subject and leaves the interpretation to the
-// ontology, rather than branching on the subject's type to pick an edge.
 
 MERGE (r:Relationship {uri: 'http://industry40.tv/ontology/core/rel/CONCERNS'})
 ON CREATE SET r.created_at = datetime()
@@ -463,25 +392,6 @@ SET r:Core,
     r.version = '1.0.0';
 
 // ----- How state is asserted -----
-// An entity carries exactly one HAS_STATE edge, to its CURRENT state; the edge
-// is replaced when the state changes. History is not accumulated on the entity.
-// Instead each event records the state it produced, so the sequence of events
-// ordered by time IS the state history:
-//
-//   (wo)-[:HAS_STATE]->(:ActiveState)                  current, one hop
-//   (evt)-[:CHANGES_STATE]->(wo)                       what changed
-//   (evt)-[:TRANSITIONS_TO]->(:ActiveState)            what it became
-//   (evt)-[:TRANSITIONS_FROM]->(:DispatchedState)      optional; absent on the first
-//
-// The event node already carries the timestamp and provenance a separate state
-// assertion would hold — eventTime, source origin, gateway and system — so it
-// serves as the assertion rather than duplicating it into another node. Where a
-// regulated audit trail needs more (authority, reason, electronic signature), a
-// reified StateAssertion remains the right escalation; it is deliberately not
-// the default. Durations and time-in-state stay in the historian with the
-// rest of the time-series data.
-//
-// These specialise nothing: no core relationship expresses event-to-state.
 
 MERGE (r:Relationship {uri: 'http://industry40.tv/ontology/core/rel/TRANSITIONS_TO'})
 ON CREATE SET r.created_at = datetime()
